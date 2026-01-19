@@ -184,16 +184,32 @@ def build_payload():
 def main():
     # Optional: hide Streamlit chrome for a cleaner 1:1 look
     st.markdown(
-        """
-        <style>
-          #MainMenu {visibility: hidden;}
-          header {visibility: hidden;}
-          footer {visibility: hidden;}
-          .block-container {padding-top: 0rem; padding-bottom: 0rem;}
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    """
+    <style>
+      #MainMenu {visibility: hidden;}
+      header {visibility: hidden;}
+      footer {visibility: hidden;}
+
+      /* Remove Streamlit default paddings/margins */
+      .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        margin: 0rem !important;
+        max-width: 100% !important;
+      }
+      [data-testid="stAppViewContainer"] {
+        padding: 0rem !important;
+      }
+      [data-testid="stApp"] {
+        margin: 0rem !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
     payload = build_payload()
 
