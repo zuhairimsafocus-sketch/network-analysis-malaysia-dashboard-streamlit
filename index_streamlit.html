@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Network Analysis Dashboard</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root{
+  --primary:#1e3a8a;
+  --secondary:#0ea5e9;
+  --success:#16a34a;
+  --warning:#f59e0b;
+  --danger:#dc2626;
+  --bg:#f4f6f9;
+  --card:#ffffff;
+  --text:#1f2937;
+}
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  overflow-x:hidden;
+}
+
+.dashboard{ max-width:1300px; margin:auto; padding:24px; }
+.header{ margin-bottom:25px; }
+.header h1{ font-size:26px; font-weight:700; margin:0; color:var(--primary); }
+
+/* Cards */
+.cards{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:20px;
+  margin-bottom:30px;
+}
+.card{
+  background:var(--card);
+  border-radius:14px;
+  padding:22px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.04);
+}
+.card h3{ font-size:13px; font-weight:600; color:#6b7280; margin:0; }
+.card p{
+  font-size:30px;
+  font-weight:700;
+  margin-top:8px;
+  color:var(--primary);
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+.card .pct{
+  font-size:13px;
+  font-weight:800;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid transparent;
+}
+.card .pct-inprogress{ color:#065f46; background:#d1fae5; border-color:#a7f3d0; }
+.card .pct-resolved { color:#991b1b; background:#fee2e2; border-color:#fecaca; }
+
+
+/* Masonry columns */
+.grid{
+  column-count:3;
+  column-gap:20px;
+}
+
+/* Card / chart container */
+.chart-box{
+  background:var(--card);
+  border-radius:14px;
+  padding:16px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.04);
+  display:inline-block;
+  width:100%;
+  margin:0 0 20px 0;
+  vertical-align:top;
+  position:relative;
+}
+
+/* Standard header to keep same height */
+.chart-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-height:34px;
+  margin-bottom:6px;
+}
+.chart-header .chart-title{
+  margin:0;
+  font-size:13px;
+  font-weight:600;
+  color:#374151;
+  line-height:1.2;
+}
+
+/* Insight button inside header (NOT absolute) */
+.insight-btn{
+  border:1px solid #e5e7eb;
+  background:#fff;
+  color:#374151;
+  font-size:12px;
+  font-weight:600;
+  padding:6px 10px;
+  border-radius:999px;
+  cursor:pointer;
+  box-shadow:0 6px 16px rgba(0,0,0,0.06);
+  position:static;
+}
+.insight-btn:hover{ background:#f9fafb; }
+
+/* Stable chart height */
+.chart-area{ height:260px; }
+.chart-area.tall{ height:290px; }
+
+/* Canvas fills chart-area */
+canvas{ display:block; width:100% !important; height:100% !important; }
+
+/* Insight dropdown panel */
+.insight-panel{
+  display:none;
+  margin-top:10px;
+  padding:12px;
+  border-radius:12px;
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  font-size:12.5px;
+  line-height:1.55;
+  color:#111827;
+}
+.insight-panel .insight-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+  font-weight:700;
+  font-size:12.5px;
+}
+.insight-panel .insight-close{
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:999px;
+  padding:4px 10px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+  color:#374151;
+}
+.insight-panel .insight-close:hover{ background:#f3f4f6; }
+.insight-panel h4{ margin:10px 0 6px; font-size:12.5px; }
+.insight-panel ul{ margin:6px 0 0 18px; padding:0; }
+.insight-panel li{ margin:4px 0; }
+.insight-panel .muted{ color:#6b7280; font-size:12px; }
+
+/* Map */
+#map{ width:100%; height:100%; border-radius:12px; }
+
+/* Responsive */
+@media (max-width:1100px){
+  .cards{ grid-template-columns:repeat(3,1fr); }
+  .grid{ column-count:2; }
+}
+@media (max-width:720px){
+  .cards{ grid-template-columns:repeat(2,1fr); }
+  .grid{ column-count:1; }
+}
+</style>
+</head>
+
+<body>
+<div class="dashboard">
+
+  <div class="header">
+    <h1>Network Analysis Dashboard</h1>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="cards">
+    <div class="card">
+      <h3>Total States</h3>
+      <p id="totalStates">-</p>
+    </div>
+    <div class="card">
+      <h3>Total Districts</h3>
+      <p id="totalDistricts">-</p>
+    </div>
+    <div class="card">
+      <h3>Total Complaints</h3>
+      <p id="totalComplaints">-</p>
+    </div>
+    <div class="card">
+      <h3>Total Submitted</h3>
+      <p id="totalSubmitted">-</p>
+    </div>
+    <div class="card">
+      <h3>Total In Progress</h3>
+      <p><span id="totalInProgress">-</span><span class="pct pct-inprogress" id="pctInProgress">-</span></p>
+    </div>
+    <div class="card">
+      <h3>Total Resolved</h3>
+      <p><span id="totalResolved">-</span><span class="pct pct-resolved" id="pctResolved">-</span></p>
+    </div>
+  </div>
+
+  <!-- Masonry: 6 charts -->
+  <div class="grid">
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Total Complaints by State</p>
+        <button class="insight-btn" data-insight="state">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="stateChart"></canvas></div>
+      <div class="insight-panel" data-panel="state"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Total Complaints by District</p>
+        <button class="insight-btn" data-insight="district">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="districtChart"></canvas></div>
+      <div class="insight-panel" data-panel="district"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Total Complaints by Issue Type</p>
+        <button class="insight-btn" data-insight="issue_type">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="issueChart"></canvas></div>
+      <div class="insight-panel" data-panel="issue_type"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Signal Strength by State</p>
+        <button class="insight-btn" data-insight="signal_strength_by_state">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="coverageChart"></canvas></div>
+      <div class="insight-panel" data-panel="signal_strength_by_state"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Issue Type by State</p>
+        <button class="insight-btn" data-insight="issue_by_state">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="issueByStateChart"></canvas></div>
+      <div class="insight-panel" data-panel="issue_by_state"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <p class="chart-title">Status Report by State</p>
+        <button class="insight-btn" data-insight="status_by_state">Insight</button>
+      </div>
+      <div class="chart-area"><canvas id="statusByStateChart"></canvas></div>
+      <div class="insight-panel" data-panel="status_by_state"></div>
+    </div>
+
+  </div>
+
+  <!-- Full width: Monthly trend -->
+  <div class="chart-box" style="margin-top:6px;">
+    <div class="chart-header">
+      <p class="chart-title">Complaints Reported</p>
+      <button class="insight-btn" data-insight="reported_months">Insight</button>
+    </div>
+    <div class="chart-area tall"><canvas id="reportedMonthsChart"></canvas></div>
+    <div class="insight-panel" data-panel="reported_months"></div>
+  </div>
+
+  <!-- Full width: Map -->
+  <div class="chart-box" style="margin-top:20px;">
+    <div class="chart-header">
+      <p class="chart-title">Heatmap: Total Complaints by District</p>
+      <span></span>
+    </div>
+    <div id="map" style="height:390px;"></div>
+  </div>
+
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+/* Injected by Streamlit */
+window.__DASH__ = __DASH_PAYLOAD__;
+
+/* helpers */
+function fmtInt(n){ return (Number(n)||0).toLocaleString(); }
+function pct(part,total){ part=Number(part)||0; total=Number(total)||0; if(!total) return 0; return (part/total)*100; }
+function fmtPct(x){ return `${(Number(x)||0).toFixed(2)}%`; }
+
+/* base options */
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: true, position: "top" },
+    datalabels: {
+      color: "#374151",
+      anchor: "end",
+      align: "end",
+      offset: 0.2,
+      clamp: true,
+      font: { size: 10 }
+    }
+  },
+  scales:{
+    x:{ ticks:{ font:{ size:10 }, maxRotation:45, minRotation:30 } },
+    y:{ ticks:{ font:{ size:10 } } }
+  }
+};
+
+/* MAP helpers (Malaysia District) */
+function normalizeDistrictName(name){
+  let s = (name || "")
+    .toString()
+    .toUpperCase()
+    .replace(/&/g, "AND")
+    .replace(/[\u2019\u2018]/g, "'")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // --- Aliases to improve join quality (minimum change, map-only) ---
+  const ALIAS = {
+    "KULAI": "KULAIJAYA",
+    "SEBERANG PERAI": "SEBERANG PERAI" // handled separately (spread to U/T/S)
+  };
+  if (ALIAS[s]) s = ALIAS[s];
+  return s;
+}
+
+function getGeoDistrictName(p){
+  // Malaysia district geojson uses shapeName
+  return (p && (p.shapeName || p.SHAPENAME || p.name)) ? (p.shapeName || p.SHAPENAME || p.name) : "";
+}
+
+/* hijau:0-35, kuning:36-50, merah:51-80+ */
+function getHeatColor(v){
+  v = Number(v) || 0;
+  if (v <= 35) return "#22c55e";
+  if (v <= 50) return "#facc15";
+  return "#dc2626";
+}
+
+function initDistrictMap(districtData){
+  // Malaysia center
+  const map = L.map("map").setView([4.2, 102.0], 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"&copy; OpenStreetMap" }).addTo(map);
+
+  const lookup = {};
+  for (const key in districtData){
+    const k = normalizeDistrictName(key);
+    lookup[k] = Number(districtData[key]) || 0;
+  }
+
+  // Special handling: if CSV has Seberang Perai as one label but geojson splits it
+  if (Object.prototype.hasOwnProperty.call(lookup, "SEBERANG PERAI")){
+    const v = lookup["SEBERANG PERAI"] || 0;
+    lookup["SEBERANG PERAI UTARA"] = Math.max(lookup["SEBERANG PERAI UTARA"] || 0, v);
+    lookup["SEBERANG PERAI TENGAH"] = Math.max(lookup["SEBERANG PERAI TENGAH"] || 0, v);
+    lookup["SEBERANG PERAI SELATAN"] = Math.max(lookup["SEBERANG PERAI SELATAN"] || 0, v);
+  }
+
+  const geo = (window.__DASH__ && window.__DASH__.geojson) ? window.__DASH__.geojson : null;
+  if(!geo){
+    console.error("GeoJSON not available (injected is null).");
+    return;
+  }
+
+  const layer = L.geoJSON(geo,{
+    style: feature => {
+      const rawName = getGeoDistrictName(feature.properties || {});
+      const k = normalizeDistrictName(rawName);
+      const value = lookup[k] ?? 0;
+      return { fillColor:getHeatColor(value), weight:0.8, color:"#374151", fillOpacity:0.70 };
+    },
+    onEachFeature: (feature, layer) => {
+      const rawName = getGeoDistrictName(feature.properties || {});
+      const k = normalizeDistrictName(rawName);
+      const value = Object.prototype.hasOwnProperty.call(lookup, k) ? (lookup[k] ?? 0) : 0;
+      layer.bindTooltip(`<b>${rawName || "Unknown"}</b><br>Total Complaints: ${value}`, { sticky:true });
+    }
+  }).addTo(map);
+
+  try { map.fitBounds(layer.getBounds(), { padding:[10,10] }); } catch(e) {}
+}
+
+/* INSIGHTS */
+const INSIGHTS = {
+  state: { title:"Total Complaints by State", body:`
+    <h4>Insight</h4><ul>
+      <li>Complaint volume differs by state; the top state is the primary hotspot.</li>
+      <li>If the top state is significantly higher, issues are concentrated rather than evenly spread.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Prioritize top 1–2 states for drilldown by <b>District</b> and <b>Issue Type</b>.</li>
+      <li>Set weekly reduction targets and track trend.</li>
+    </ul>
+    <div class="muted">Optional: normalize by subscribers/population if available.</div>
+  `},
+  district: { title:"Total Complaints by District", body:`
+    <h4>Insight</h4><ul>
+      <li>Complaints are concentrated in a few districts, indicating localized pain points.</li>
+      <li>Persistent hotspots may reflect recurring outages or indoor coverage gaps.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Create a <b>Top 5 District</b> action list for field tests and site checks.</li>
+      <li>Escalate districts that remain high for 2–3 consecutive periods.</li>
+    </ul>
+    <div class="muted">Note: map coverage depends on district naming match between CSV and GeoJSON.</div>
+  `},
+  issue_type: { title:"Total Complaints by Issue Type", body:`
+    <h4>Insight</h4><ul>
+      <li>The top issue type indicates the dominant pain point (availability vs performance).</li>
+      <li>If No Signal leads, stability and coverage come before speed improvements.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Triage order: <b>No Signal → Call Drop → Slow Speed</b>.</li>
+      <li>Track MTTR and recurrence for the top issue.</li>
+    </ul>
+  `},
+  signal_strength_by_state: { title:"Signal Strength by State", body:`
+    <h4>Insight</h4><ul>
+      <li>High <b>Weak + No Signal</b> indicates coverage risk and inconsistent experience.</li>
+      <li>If aligned with No Signal complaints, coverage is likely the main driver.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Prioritize RF optimization (tilt/power/neighbor list) in worst states.</li>
+      <li>Investigate indoor hotspots; consider indoor solutions where relevant.</li>
+    </ul>
+  `},
+  issue_by_state: { title:"Issue Type by State", body:`
+    <h4>Insight</h4><ul>
+      <li>States may have different dominant issue types (coverage vs reliability vs capacity).</li>
+      <li>A single dominant issue suggests clearer fix path.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>For each state, address the <b>Top 1 Issue</b> first using a playbook.</li>
+      <li>Apply targeted actions: coverage, reliability, or capacity tuning.</li>
+    </ul>
+  `},
+  status_by_state: { title:"Status Report by State", body:`
+    <h4>Insight</h4><ul>
+      <li>High <b>In Progress</b> vs <b>Closed</b> indicates backlog risk.</li>
+      <li>Differences across states may mean resource imbalance or complexity.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Add backlog KPI: <b>In Progress / Total</b> and aging SLA (e.g., >7 days).</li>
+      <li>Reassign resources to high-backlog states and prioritize “No Signal” closures.</li>
+    </ul>
+  `},
+  reported_months: { title:"Complaints Reported (Monthly Trend)", body:`
+    <h4>Insight</h4><ul>
+      <li>Spikes usually indicate an incident, rollout, or reporting scope change.</li>
+      <li>If levels stay high after spike, recovery may be incomplete.</li>
+    </ul>
+    <h4>Recommendation</h4><ul>
+      <li>Investigate spike start period (incidents/config/rollouts).</li>
+      <li>Drill down spike by <b>State</b> and <b>Issue Type</b> to isolate contributors.</li>
+    </ul>
+  `}
+};
+
+/* Insight panel */
+function renderInsightHTML(key){
+  const cfg = INSIGHTS[key];
+  if(!cfg){
+    return `
+      <div class="insight-title">
+        <div>Insight</div>
+        <button class="insight-close" type="button">Close</button>
+      </div>
+      <div class="muted">No insight configured for: <b>${key}</b></div>
+    `;
+  }
+  return `
+    <div class="insight-title">
+      <div>${cfg.title || "Insight"}</div>
+      <button class="insight-close" type="button">Close</button>
+    </div>
+    ${cfg.body || ""}
+  `;
+}
+
+function toggleInsightUnderChart(btn){
+  const key = btn.getAttribute("data-insight");
+  const chartBox = btn.closest(".chart-box");
+  if(!chartBox) return;
+
+  const panel = chartBox.querySelector(`.insight-panel[data-panel="${key}"]`);
+  if(!panel) return;
+
+  const isOpen = panel.style.display === "block";
+
+  // close panels inside this chart box only
+  chartBox.querySelectorAll(".insight-panel").forEach(p=>{
+    p.style.display = "none";
+    p.innerHTML = "";
+  });
+
+  if(isOpen) return;
+
+  panel.innerHTML = renderInsightHTML(key);
+  panel.style.display = "block";
+
+  const closeBtn = panel.querySelector(".insight-close");
+  if(closeBtn){
+    closeBtn.addEventListener("click", ()=>{
+      panel.style.display = "none";
+      panel.innerHTML = "";
+    });
+  }
+
+  panel.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
+document.querySelectorAll(".insight-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=> toggleInsightUnderChart(btn));
+});
+
+/* Load dashboard */
+function loadDashboard(){
+  const dash = window.__DASH__ || {};
+
+  const summary = dash.summary || {};
+  const totalComplaints = Number(summary.total_complaints||0);
+  const totalSubmitted  = Number(summary.total_submitted||0);
+  const totalInProgress = Number(summary.total_in_progress||0);
+  const totalResolved   = Number(summary.total_resolved||0);
+
+  document.getElementById("totalStates").innerText = fmtInt(summary.total_states);
+  document.getElementById("totalDistricts").innerText = fmtInt(summary.total_districts);
+  document.getElementById("totalComplaints").innerText = fmtInt(totalComplaints);
+  document.getElementById("totalSubmitted").innerText = fmtInt(totalSubmitted);
+
+  document.getElementById("totalInProgress").innerText = fmtInt(totalInProgress);
+  document.getElementById("pctInProgress").innerText = `(${fmtPct(pct(totalInProgress, totalSubmitted))})`;
+
+  document.getElementById("totalResolved").innerText = fmtInt(totalResolved);
+  document.getElementById("pctResolved").innerText = `(${fmtPct(pct(totalResolved, totalSubmitted))})`;
+
+  const state = dash.state || {};
+  const district = dash.district || {};
+  const issue = dash.issue || {};
+  const signalMatrix = dash.signal_matrix || {};
+  const issueMatrix = dash.issue_matrix || {};
+  const statusMatrix = dash.status_matrix || {};
+  const reported = dash.reported || {};
+
+  // Charts
+  new Chart(stateChart, {
+    type:"bar",
+    data:{ labels:Object.keys(state), datasets:[{ label:"Total Complaints by State", data:Object.values(state), backgroundColor:"#3b82f6" }] },
+    options: barOptions
+  });
+
+  new Chart(districtChart, {
+    type:"bar",
+    data:{ labels:Object.keys(district), datasets:[{ label:"Total Complaints by District", data:Object.values(district), backgroundColor:"#34d399" }] },
+    options: barOptions
+  });
+
+  new Chart(issueChart, {
+    type:"bar",
+    data:{ labels:Object.keys(issue), datasets:[{ label:"Total Complaints by Issue Type", data:Object.values(issue), backgroundColor:"#22c55e" }] },
+    options: barOptions
+  });
+
+  const signalOptions = {
+    responsive:true,
+    maintainAspectRatio:false,
+    indexAxis:"y",
+    plugins:{
+      legend:{ display:true, position:"top" },
+      datalabels:{
+        color:"#111827",
+        font:{ size:10, weight:"700" },
+        anchor:"center",
+        align:"center",
+        clamp:true,
+        formatter:(value)=>{ const v=Number(value)||0; return v>0 ? v : ""; }
+      }
+    },
+    scales:{ x:{ stacked:true, ticks:{ font:{ size:10 } } }, y:{ stacked:true, ticks:{ font:{ size:10 } } } }
+  };
+
+  if (signalMatrix && signalMatrix.error) {
+    new Chart(coverageChart, {
+      type:"bar",
+      data:{ labels:["No data"], datasets:[{ label:"Signal Strength", data:[0] }] },
+      options:{ ...signalOptions, plugins:{ ...signalOptions.plugins, datalabels:{ display:false }, legend:{ display:false } } }
+    });
+  } else {
+    const sStates = signalMatrix.states || [];
+    const strengths = signalMatrix.signal_strengths || [];
+    const sMatrix = signalMatrix.matrix || {};
+    const SIGNAL_COLORS = ["#8b5cf6","#06b6d4","#f97316","#22c55e","#a855f7","#0ea5e9","#f43f5e","#84cc16"];
+
+    const signalDatasets = strengths.map((ss, idx) => ({
+      label: ss,
+      data: sMatrix[ss] || [],
+      backgroundColor: SIGNAL_COLORS[idx % SIGNAL_COLORS.length],
+      borderColor: SIGNAL_COLORS[idx % SIGNAL_COLORS.length],
+      borderWidth: 1
+    }));
+
+    new Chart(coverageChart, {
+      type:"bar",
+      data:{ labels:sStates, datasets:signalDatasets },
+      options: signalOptions
+    });
+  }
+
+  const iStates = issueMatrix.states || [];
+  const issueTypes = issueMatrix.issue_types || [];
+  const iMatrix = issueMatrix.matrix || {};
+
+  const issueByStateOptions = {
+    responsive:true,
+    maintainAspectRatio:false,
+    indexAxis:"y",
+    plugins:{
+      legend:{ display:true, position:"top" },
+      datalabels:{
+        color:"#111827",
+        font:{ size:10, weight:"700" },
+        anchor:"center",
+        align:"center",
+        clamp:true,
+        formatter:(value)=>{ const v=Number(value)||0; return v>0 ? v : ""; }
+      }
+    },
+    scales:{ x:{ stacked:true, ticks:{ font:{ size:10 } } }, y:{ stacked:true, ticks:{ font:{ size:10 } } } }
+  };
+
+  new Chart(issueByStateChart, {
+    type:"bar",
+    data:{ labels:iStates, datasets: issueTypes.map(it=>({ label:it, data:iMatrix[it] || [] })) },
+    options: issueByStateOptions
+  });
+
+  const stStates = statusMatrix.states || [];
+  const statuses = statusMatrix.statuses || [];
+  const stMatrix = statusMatrix.matrix || {};
+  const statusColors = { "Open":"#3b82f6", "In Progress":"#f59e0b", "Closed":"#16a34a" };
+
+  const statusOptions = {
+    responsive:true,
+    maintainAspectRatio:false,
+    indexAxis:"y",
+    plugins:{
+      legend:{ display:true, position:"top" },
+      datalabels:{
+        color:"#111827",
+        font:{ size:10, weight:"700" },
+        anchor:"center",
+        align:"center",
+        clamp:true,
+        formatter:(value)=>{ const v=Number(value)||0; return v>0 ? v : ""; }
+      }
+    },
+    scales:{ x:{ stacked:true, ticks:{ font:{ size:10 } } }, y:{ stacked:true, ticks:{ font:{ size:10 } } } }
+  };
+
+  new Chart(statusByStateChart, {
+    type:"bar",
+    data:{ labels:stStates, datasets: statuses.map(st=>({ label:st, data:stMatrix[st] || [], backgroundColor: statusColors[st] || "#9ca3af" })) },
+    options: statusOptions
+  });
+
+  const monthOrder = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const counts = monthOrder.map(m => reported[m] ?? 0);
+
+  new Chart(reportedMonthsChart, {
+    type:"line",
+    data:{ labels:monthOrder, datasets:[{ label:"Total Complaints by Month", data:counts, tension:0.25 }] },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:false },
+        datalabels:{
+          display:true,
+          color:"#374151",
+          font:{ size:10, weight:"700" },
+          anchor:"end",
+          align:"top",
+          offset:4,
+          clamp:true,
+          formatter:(value)=>{ const v=Number(value)||0; return v>0 ? v : ""; }
+        }
+      },
+      scales:{
+        x:{ ticks:{ font:{ size:10 } } },
+        y:{ ticks:{ font:{ size:10 } } }
+      }
+    }
+  });
+
+  initDistrictMap(district);
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
