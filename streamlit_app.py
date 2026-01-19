@@ -221,7 +221,8 @@ def main():
     html = html.replace("__DASH_PAYLOAD__", json.dumps(payload))
 
     # Render
-    components.html(html, height=1800, scrolling=False)
+    components.html(html, height=1900, scrolling=False)
 
 if __name__ == "__main__":
     main()
+
