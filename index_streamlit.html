@@ -71,11 +71,13 @@ body{
 .card .pct-resolved { color:#991b1b; background:#fee2e2; border-color:#fecaca; }
 
 
-/* Masonry columns */
+/* Fixed 3-column grid (Row-based layout) */
 .grid{
-  column-count:3;
-  column-gap:20px;
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:20px;
 }
+
 
 /* Card / chart container */
 .chart-box{
@@ -172,12 +174,13 @@ canvas{ display:block; width:100% !important; height:100% !important; }
 /* Responsive */
 @media (max-width:1100px){
   .cards{ grid-template-columns:repeat(3,1fr); }
-  .grid{ column-count:2; }
+  .grid{ grid-template-columns:repeat(2, 1fr); }
 }
 @media (max-width:720px){
   .cards{ grid-template-columns:repeat(2,1fr); }
-  .grid{ column-count:1; }
+  .grid{ grid-template-columns:1fr; }
 }
+
 </style>
 </head>
 
@@ -219,61 +222,64 @@ canvas{ display:block; width:100% !important; height:100% !important; }
   <!-- Masonry: 6 charts -->
   <div class="grid">
 
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Total Complaints by State</p>
-        <button class="insight-btn" data-insight="state">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="stateChart"></canvas></div>
-      <div class="insight-panel" data-panel="state"></div>
+  <!-- Row 1 -->
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Total Complaints by State</p>
+      <button class="insight-btn" data-insight="state">Insight</button>
     </div>
-
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Total Complaints by District</p>
-        <button class="insight-btn" data-insight="district">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="districtChart"></canvas></div>
-      <div class="insight-panel" data-panel="district"></div>
-    </div>
-
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Total Complaints by Issue Type</p>
-        <button class="insight-btn" data-insight="issue_type">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="issueChart"></canvas></div>
-      <div class="insight-panel" data-panel="issue_type"></div>
-    </div>
-
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Signal Strength by State</p>
-        <button class="insight-btn" data-insight="signal_strength_by_state">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="coverageChart"></canvas></div>
-      <div class="insight-panel" data-panel="signal_strength_by_state"></div>
-    </div>
-
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Issue Type by State</p>
-        <button class="insight-btn" data-insight="issue_by_state">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="issueByStateChart"></canvas></div>
-      <div class="insight-panel" data-panel="issue_by_state"></div>
-    </div>
-
-    <div class="chart-box">
-      <div class="chart-header">
-        <p class="chart-title">Status Report by State</p>
-        <button class="insight-btn" data-insight="status_by_state">Insight</button>
-      </div>
-      <div class="chart-area"><canvas id="statusByStateChart"></canvas></div>
-      <div class="insight-panel" data-panel="status_by_state"></div>
-    </div>
-
+    <div class="chart-area"><canvas id="stateChart"></canvas></div>
+    <div class="insight-panel" data-panel="state"></div>
   </div>
+
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Total Complaints by District</p>
+      <button class="insight-btn" data-insight="district">Insight</button>
+    </div>
+    <div class="chart-area"><canvas id="districtChart"></canvas></div>
+    <div class="insight-panel" data-panel="district"></div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Total Complaints by Issue Type</p>
+      <button class="insight-btn" data-insight="issue_type">Insight</button>
+    </div>
+    <div class="chart-area"><canvas id="issueChart"></canvas></div>
+    <div class="insight-panel" data-panel="issue_type"></div>
+  </div>
+
+  <!-- Row 2 -->
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Issue Type by State</p>
+      <button class="insight-btn" data-insight="issue_by_state">Insight</button>
+    </div>
+    <div class="chart-area"><canvas id="issueByStateChart"></canvas></div>
+    <div class="insight-panel" data-panel="issue_by_state"></div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Signal Strength by State</p>
+      <button class="insight-btn" data-insight="signal_strength_by_state">Insight</button>
+    </div>
+    <div class="chart-area"><canvas id="coverageChart"></canvas></div>
+    <div class="insight-panel" data-panel="signal_strength_by_state"></div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-header">
+      <p class="chart-title">Status Report by State</p>
+      <button class="insight-btn" data-insight="status_by_state">Insight</button>
+    </div>
+    <div class="chart-area"><canvas id="statusByStateChart"></canvas></div>
+    <div class="insight-panel" data-panel="status_by_state"></div>
+  </div>
+
+</div>
+
 
   <!-- Full width: Monthly trend -->
   <div class="chart-box" style="margin-top:6px;">
