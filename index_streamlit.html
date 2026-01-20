@@ -294,7 +294,7 @@ canvas{ display:block; width:100% !important; height:100% !important; }
   <!-- Full width: Map -->
   <div class="chart-box" style="margin-top:20px;">
     <div class="chart-header">
-      <p class="chart-title">Heatmap: Total Complaints by District</p>
+      <p class="chart-title">Drill-down: Total Complaints (State → District)</p>
       <span></span>
     </div>
     <div id="map" style="height:390px;"></div>
@@ -334,97 +334,271 @@ const barOptions = {
   }
 };
 
-/* MAP helpers (Malaysia District) */
-function normalizeDistrictName(name){
-  let s = (name || "")
+/* =========================
+   MAP (DRILL-DOWN)
+   ========================= */
+
+function normKey(x){
+  return (x || "")
     .toString()
+    .trim()
     .toUpperCase()
-    .replace(/&/g, "AND")
-    .replace(/[\u2019\u2018]/g, "'")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // --- Aliases to improve join quality (minimum change, map-only) ---
-  const ALIAS = {
-    "KULAI": "KULAIJAYA",
-    "SEBERANG PERAI": "SEBERANG PERAI" // handled separately (spread to U/T/S)
-  };
-  if (ALIAS[s]) s = ALIAS[s];
-  return s;
+    .replace(/\s+/g, " ");
 }
 
-function getGeoDistrictName(p){
-  // Malaysia district geojson uses shapeName
-  return (p && (p.shapeName || p.SHAPENAME || p.name)) ? (p.shapeName || p.SHAPENAME || p.name) : "";
+// State code -> full state name (normalize to UPPER)
+const STATE_CODE_TO_NAME = {
+  "JHR": "JOHOR",
+  "KDH": "KEDAH",
+  "KTN": "KELANTAN",
+  "MLK": "MELAKA",
+  "NSN": "NEGERI SEMBILAN",
+  "PHG": "PAHANG",
+  "PNG": "PULAU PINANG",
+  "PRK": "PERAK",
+  "PLS": "PERLIS",
+  "SBH": "SABAH",
+  "SWK": "SARAWAK",
+  "SGR": "SELANGOR",
+  "TRG": "TERENGGANU",
+  "KUL": "KUALA LUMPUR",
+  "LBN": "LABUAN",
+  "PJY": "PUTRAJAYA"
+};
+
+function getStateNameFromProps(p){
+  const raw = (p && (p.state || p.name || p.shapeName)) ? (p.state || p.name || p.shapeName) : "";
+  const k = normKey(raw);
+
+  // If raw is a known state code, display full name
+  if (STATE_CODE_TO_NAME[k]) return STATE_CODE_TO_NAME[k];
+
+  // If raw already looks like a name, keep it
+  // (Optional small cleanup for WP formatting)
+  if (k === "W.P. KUALA LUMPUR" || k === "WP KUALA LUMPUR") return "KUALA LUMPUR";
+  if (k === "W.P. PUTRAJAYA" || k === "WP PUTRAJAYA") return "PUTRAJAYA";
+  if (k === "W.P. LABUAN" || k === "WP LABUAN") return "LABUAN";
+
+  return raw;
 }
 
-/* hijau:0-35, kuning:36-50, merah:51-80+ */
-function getHeatColor(v){
-  v = Number(v) || 0;
 
-  // 0–34: no color (transparent)
-  if (v <= 34) return null;
-
-  // 35–50: yellow
-  if (v <= 50) return "#facc15";
-
-  // 51+: red (51–80+)
-  return "#dc2626";
+function getDistrictNameFromProps(p){
+  return (p && (p.district || p.shapeName || p.name || p.DISTRICT)) ? (p.district || p.shapeName || p.name || p.DISTRICT) : "";
 }
 
-function initDistrictMap(districtData){
-  // Malaysia center
-  const map = L.map("map").setView([4.2, 102.0], 6);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"&copy; OpenStreetMap" }).addTo(map);
+function safeNum(x){
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+}
 
-  const lookup = {};
-  for (const key in districtData){
-    const k = normalizeDistrictName(key);
-    lookup[k] = Number(districtData[key]) || 0;
-  }
+/* simple quantile-ish buckets */
+function colorByComplaints(v){
+  v = safeNum(v);
 
-  // Special handling: if CSV has Seberang Perai as one label but geojson splits it
-  if (Object.prototype.hasOwnProperty.call(lookup, "SEBERANG PERAI")){
-    const v = lookup["SEBERANG PERAI"] || 0;
-    lookup["SEBERANG PERAI UTARA"] = Math.max(lookup["SEBERANG PERAI UTARA"] || 0, v);
-    lookup["SEBERANG PERAI TENGAH"] = Math.max(lookup["SEBERANG PERAI TENGAH"] || 0, v);
-    lookup["SEBERANG PERAI SELATAN"] = Math.max(lookup["SEBERANG PERAI SELATAN"] || 0, v);
-  }
+  // hijau: 114-120
+  if (v >= 114 && v <= 120) return "#16a34a";
 
-  const geo = (window.__DASH__ && window.__DASH__.geojson) ? window.__DASH__.geojson : null;
-  if(!geo){
-    console.error("GeoJSON not available (injected is null).");
+  // kuning: 121-130
+  if (v >= 121 && v <= 130) return "#facc15";
+
+  // merah: 131-150
+  if (v >= 131 && v <= 150) return "#dc2626";
+
+  // selain range: transparent / neutral
+  return "transparent";
+}
+
+function colorByDistrictComplaints(v){
+  v = safeNum(v);
+
+  // contoh range district (ubah ikut data awak)
+  if (v <= 0) return "transparent";
+  if (v <= 20) return "#bbf7d0";   // light green
+  if (v <= 50) return "#fde68a";   // light yellow
+  return "#fca5a5";                // light red (51+)
+}
+
+
+
+function makeTooltipHTML(title, value){
+  return `<b>${title || "Unknown"}</b><br>Total Complaints: ${fmtInt(value)}`;
+}
+
+function initDrilldownMap(){
+  const dash = window.__DASH__ || {};
+  const statesGeo = dash.geojson_states || null;
+  const districtsGeo = dash.geojson_districts || null;
+
+  if(!statesGeo || !districtsGeo){
+    console.error("Drilldown GeoJSON not available. Ensure geojson_states and geojson_districts are injected.");
     return;
   }
 
-  const layer = L.geoJSON(geo,{
-    style: feature => {
-      const rawName = getGeoDistrictName(feature.properties || {});
-      const k = normalizeDistrictName(rawName);
-      const value = lookup[k] ?? 0;
-      const c = getHeatColor(value);
+  // Malaysia center
+  const map = L.map("map", { zoomControl:true }).setView([4.2, 102.0], 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution:"&copy; OpenStreetMap"
+  }).addTo(map);
 
+  let currentLevel = "state"; // "state" | "district"
+  let selectedState = null;
+
+  let statesLayer = null;
+  let districtsLayer = null;
+
+  const backControl = L.control({ position: "topleft" });
+  backControl.onAdd = function(){
+    const div = L.DomUtil.create("div", "leaflet-bar");
+    div.style.background = "#fff";
+    div.style.borderRadius = "10px";
+    div.style.padding = "6px 10px";
+    div.style.cursor = "pointer";
+    div.style.boxShadow = "0 8px 20px rgba(0,0,0,0.10)";
+    div.style.border = "1px solid #e5e7eb";
+    div.style.fontFamily = "Inter, sans-serif";
+    div.style.fontSize = "12px";
+    div.style.fontWeight = "700";
+    div.style.color = "#374151";
+    div.innerHTML = "Back to Malaysia";
+    div.onclick = function(){
+      if(currentLevel === "district"){
+        showStates();
+      }
+    };
+    return div;
+  };
+
+  function showBackControl(show){
+    try{
+      if(show){
+        backControl.addTo(map);
+      }else{
+        backControl.remove();
+      }
+    }catch(e){}
+  }
+
+  function clearLayers(){
+    if(statesLayer){ map.removeLayer(statesLayer); statesLayer = null; }
+    if(districtsLayer){ map.removeLayer(districtsLayer); districtsLayer = null; }
+  }
+
+  function showStates(){
+    clearLayers();
+    currentLevel = "state";
+    selectedState = null;
+    showBackControl(false);
+
+    statesLayer = L.geoJSON(statesGeo, {
+      style: (feature) => {
+        const p = feature.properties || {};
+        const v = safeNum(p.total_complaints);
+        return {
+          fillColor: colorByComplaints(v),
+          fillOpacity: 0.75,
+          color: "#ffffff",
+          weight: 1
+        };
+      },
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties || {};
+        const nm = getStateNameFromProps(p);
+        const v = safeNum(p.total_complaints);
+
+        layer.bindTooltip(makeTooltipHTML(nm, v), { sticky:true });
+
+        layer.on("click", () => {
+  const raw = [
+    p.state,        // sometimes full name
+    p.name,         // sometimes code (e.g., PHG) or name
+    p.state_id,     // sometimes numeric/string id
+    p.id
+  ].filter(Boolean).map(normKey);
+
+  // Expand candidates: if any looks like a state code, add its full-name mapping
+  const expanded = new Set(raw);
+
+  raw.forEach(k => {
+    // If k is a known code, add mapped full name
+    if (STATE_CODE_TO_NAME[k]) expanded.add(STATE_CODE_TO_NAME[k]);
+
+    // Some datasets store "W.P. KUALA LUMPUR" / "WP KUALA LUMPUR"
+    // Add a gentle alias for common federal territory formatting.
+    if (k === "W.P. KUALA LUMPUR" || k === "WP KUALA LUMPUR") expanded.add("KUALA LUMPUR");
+    if (k === "W.P. PUTRAJAYA" || k === "WP PUTRAJAYA") expanded.add("PUTRAJAYA");
+    if (k === "W.P. LABUAN" || k === "WP LABUAN") expanded.add("LABUAN");
+  });
+
+  const stateKeys = Array.from(expanded);
+  if(stateKeys.length){
+    showDistricts(stateKeys);
+  }
+});
+
+
+      }
+    }).addTo(map);
+
+    try { map.fitBounds(statesLayer.getBounds(), { padding:[10,10] }); } catch(e) {}
+  }
+
+  function showDistricts(stateKeys){
+  clearLayers();
+  currentLevel = "district";
+  selectedState = (stateKeys && stateKeys[0]) ? stateKeys[0] : null;
+  showBackControl(true);
+
+  // Filter district features by selected state (robust match)
+  const filtered = {
+    type: "FeatureCollection",
+    features: (districtsGeo.features || []).filter(f => {
+      const p = (f && f.properties) ? f.properties : {};
+      const dState = normKey(p.state || p.STATE || p.State || "");
+
+      // match if any key equals district's state
+      return stateKeys.includes(dState);
+    })
+  };
+
+  districtsLayer = L.geoJSON(filtered, {
+    style: (feature) => {
+      const p = feature.properties || {};
+      const v = safeNum(p.total_complaints);
+      const c = colorByDistrictComplaints(v);
 return {
-  fillColor: c || "transparent",
-  fillOpacity: c ? 0.70 : 0.0,
-
-  // buang border/stroke
-  stroke: false,
-  weight: 0
+  fillColor: c,
+  fillOpacity: (c === "transparent") ? 0.0 : 0.75,
+  color: "#ffffff",
+  weight: 1
 };
-
 
     },
     onEachFeature: (feature, layer) => {
-      const rawName = getGeoDistrictName(feature.properties || {});
-      const k = normalizeDistrictName(rawName);
-      const value = Object.prototype.hasOwnProperty.call(lookup, k) ? (lookup[k] ?? 0) : 0;
-      layer.bindTooltip(`<b>${rawName || "Unknown"}</b><br>Total Complaints: ${value}`, { sticky:true });
+      const p = feature.properties || {};
+      const nm = getDistrictNameFromProps(p) || "Unknown";
+      const v = safeNum(p.total_complaints);
+      layer.bindTooltip(makeTooltipHTML(nm, v), { sticky:true });
     }
   }).addTo(map);
 
-  try { map.fitBounds(layer.getBounds(), { padding:[10,10] }); } catch(e) {}
+  const count = (filtered.features || []).length;
+
+  // DEBUG: buka console browser untuk nampak
+  console.log("[Drilldown] stateKeys:", stateKeys, "districts matched:", count);
+
+  if(count === 0){
+    console.warn("[Drilldown] No districts matched. Returning to states.");
+    showStates();
+    return;
+  }
+
+  try { map.fitBounds(districtsLayer.getBounds(), { padding:[10,10] }); } catch(e) {}
+}
+
+
+  // Initial load
+  showStates();
 }
 
 /* INSIGHTS */
@@ -739,7 +913,8 @@ function loadDashboard(){
     }
   });
 
-  initDistrictMap(district);
+  // NEW: Drill-down map (states -> districts)
+  initDrilldownMap();
 }
 
 loadDashboard();
