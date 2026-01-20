@@ -184,31 +184,73 @@ def build_payload():
 def main():
     # Optional: hide Streamlit chrome for a cleaner 1:1 look
     st.markdown(
-    """
-    <style>
-      #MainMenu {visibility: hidden;}
-      header {visibility: hidden;}
-      footer {visibility: hidden;}
+"""
+<style>
+  /* =========================
+     Remove ALL top whitespace / chrome
+     ========================= */
 
-      /* Remove Streamlit default paddings/margins */
-      .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        margin: 0rem !important;
-        max-width: 100% !important;
-      }
-      [data-testid="stAppViewContainer"] {
-        padding: 0rem !important;
-      }
-      [data-testid="stApp"] {
-        margin: 0rem !important;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True
+  /* Hide main menu + footer */
+  #MainMenu { visibility: hidden; }
+  footer { visibility: hidden; }
+
+  /* Kill Streamlit header + any reserved space */
+  header[data-testid="stHeader"] {
+    display: none !important;
+    height: 0 !important;
+  }
+
+  /* Kill toolbar / status / decoration containers that create top gap */
+  [data-testid="stToolbar"]{
+    display:none !important;
+    height:0 !important;
+  }
+  [data-testid="stDecoration"]{
+    display:none !important;
+    height:0 !important;
+  }
+  [data-testid="stStatusWidget"]{
+    display:none !important;
+    height:0 !important;
+  }
+
+  /* Some builds keep a top block container for header area */
+  [data-testid="stAppViewContainer"] > .main{
+    padding-top: 0 !important;
+  }
+
+  /* Remove paddings/margins everywhere */
+  html, body{
+    margin:0 !important;
+    padding:0 !important;
+    height:100% !important;
+    background:#f4f6f9 !important; /* match dashboard background */
+  }
+
+  [data-testid="stApp"],
+  [data-testid="stAppViewContainer"],
+  [data-testid="stMainBlockContainer"],
+  section.main,
+  .block-container{
+    margin:0 !important;
+    padding:0 !important;
+    max-width:100% !important;
+    background:#f4f6f9 !important; /* match dashboard background */
+  }
+
+  /* Make the iframe container flush (no gap) */
+  iframe{
+    display:block !important;
+    margin:0 !important;
+    padding:0 !important;
+    border:0 !important;
+  }
+</style>
+""",
+unsafe_allow_html=True
 )
+
+
 
 
     payload = build_payload()
@@ -225,4 +267,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
