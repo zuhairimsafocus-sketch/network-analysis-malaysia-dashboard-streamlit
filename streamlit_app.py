@@ -9,7 +9,11 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Network Analysis Dashboard", layout="wide")
 
 CSV_PATH = "complaints_coverage_by_state_malaysia.csv"
-GEOJSON_PATH = "malaysia.district.geojson"
+
+# OLD (kept): GEOJSON_PATH = "malaysia.district.geojson"
+# NEW (drill-down):
+STATE_GEOJSON_PATH = "states_enriched.geojson"
+DISTRICT_GEOJSON_PATH = "districts_enriched.geojson"
 
 SIGNAL_COL = "signal_strength"  # numeric 0-5
 DATE_COL = "reported_date"      # used to derive monthly trend
@@ -160,13 +164,23 @@ def build_payload():
         counts = months.astype(str).str.strip().str.title().value_counts().to_dict()
         reported = {m: int(counts.get(m, 0)) for m in MONTH_ORDER}
 
-    # GeoJSON
-    geojson = None
+    # =========================
+    # GEOJSON (DRILL-DOWN)
+    # =========================
+    geojson_states = None
+    geojson_districts = None
+
     try:
-        with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
-            geojson = json.load(f)
+        with open(STATE_GEOJSON_PATH, "r", encoding="utf-8") as f:
+            geojson_states = json.load(f)
     except Exception:
-        geojson = None
+        geojson_states = None
+
+    try:
+        with open(DISTRICT_GEOJSON_PATH, "r", encoding="utf-8") as f:
+            geojson_districts = json.load(f)
+    except Exception:
+        geojson_districts = None
 
     payload = {
         "summary": summary,
@@ -177,7 +191,13 @@ def build_payload():
         "issue_matrix": issue_matrix,
         "status_matrix": status_matrix,
         "reported": reported,
-        "geojson": geojson,
+
+        # keep old key for backward compatibility (optional)
+        "geojson": None,
+
+        # new keys for drill-down map
+        "geojson_states": geojson_states,
+        "geojson_districts": geojson_districts,
     }
     return payload
 
@@ -249,9 +269,6 @@ def main():
 """,
 unsafe_allow_html=True
 )
-
-
-
 
     payload = build_payload()
 
